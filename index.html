@@ -1316,6 +1316,11 @@ function deleteTab(id){
   renderTabs();renderPage();persist();
 }
 
+/* ---------- Mot de passe d'édition ---------- */
+/* Pour changer le mot de passe, remplace la valeur entre guillemets ci-dessous. */
+const EDIT_PASS='azen2026';
+let editUnlocked=false;
+
 /* ---------- Mode édition ---------- */
 function setEditing(on){
   editing=on;
@@ -1327,7 +1332,16 @@ function setEditing(on){
   resetBtn.style.display=on?'inline-block':'none';
   if(!on)saveCurrent();
 }
-editToggle.addEventListener('click',()=>setEditing(!editing));
+editToggle.addEventListener('click',()=>{
+  if(editing){setEditing(false);return;}
+  if(!editUnlocked){
+    const essai=prompt('Mot de passe pour éditer le carnet :');
+    if(essai===null)return;
+    if(essai!==EDIT_PASS){alert('Mot de passe incorrect.');return;}
+    editUnlocked=true;
+  }
+  setEditing(true);
+});
 
 /* ---------- Sauvegarde différée pendant la frappe ---------- */
 let timer;
