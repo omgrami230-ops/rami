@@ -394,9 +394,9 @@ body.editing .page-body .rune-card{cursor:text}
 <div class="player">
   <div class="panel" id="panel" role="dialog" aria-label="Musique d'ambiance">
     <div class="panel-h">Musique d'ambiance</div>
-    <div class="track" id="track">Aucune mélodie chargée</div>
+    <div class="track" id="track">St Trina</div>
     <div class="controls">
-      <button class="ctrl-btn" id="play" disabled aria-label="Lecture / Pause">
+      <button class="ctrl-btn" id="play" aria-label="Lecture / Pause">
         <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
         <svg id="icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
       </button>
@@ -404,7 +404,7 @@ body.editing .page-body .rune-card{cursor:text}
     <label class="load-label">Charger une mélodie<input type="file" id="file" accept="audio/*"></label>
     <div class="vol">
       <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/></svg>
-      <input type="range" id="vol" min="0" max="1" step="0.01" value="0.6" aria-label="Volume">
+      <input type="range" id="vol" min="0" max="1" step="0.01" value="0.5" aria-label="Volume">
     </div>
   </div>
   <button class="seal" id="seal" aria-label="Ouvrir le lecteur de musique">
@@ -1375,7 +1375,7 @@ resetBtn.addEventListener('click',()=>{
 
 /* ---------- Voile ---------- */
 const veil=document.getElementById('veil');
-function lift(){veil.classList.add('lifted')}
+function lift(){veil.classList.add('lifted');if(typeof startMusic==='function')startMusic();}
 veil.addEventListener('click',lift);
 veil.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')lift()});
 
@@ -1435,15 +1435,25 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRuneModal();});
 /* ---------- Lecteur de musique ---------- */
 const playBtn=document.getElementById('play'),iconPlay=document.getElementById('icon-play'),iconPause=document.getElementById('icon-pause');
 const fileInput=document.getElementById('file'),vol=document.getElementById('vol'),trackEl=document.getElementById('track');
-const audio=new Audio();audio.loop=true;audio.volume=parseFloat(vol.value);
+const audio=new Audio();audio.loop=true;audio.preload='auto';
+audio.src='azen-theme.mp3';
+audio.volume=0.5;vol.value=0.5;
+trackEl.textContent='St Trina';
+playBtn.disabled=false;
+let musicStarted=false;
+function startMusic(){
+  if(musicStarted)return;
+  audio.volume=parseFloat(vol.value)||0.5;
+  audio.play().then(()=>{musicStarted=true;setPlaying();}).catch(()=>{});
+}
 seal.addEventListener('click',()=>panel.classList.toggle('open'));
 fileInput.addEventListener('change',e=>{
   const f=e.target.files[0];if(!f)return;
   audio.src=URL.createObjectURL(f);trackEl.textContent=f.name.replace(/\.[^.]+$/,'');
-  playBtn.disabled=false;audio.play().then(setPlaying).catch(()=>{});
+  musicStarted=true;playBtn.disabled=false;audio.play().then(setPlaying).catch(()=>{});
 });
 playBtn.addEventListener('click',()=>{if(!audio.src)return;
-  if(audio.paused){audio.play().then(setPlaying).catch(()=>{});}else{audio.pause();setPaused();}});
+  if(audio.paused){musicStarted=true;audio.play().then(setPlaying).catch(()=>{});}else{audio.pause();setPaused();}});
 function setPlaying(){iconPlay.style.display='none';iconPause.style.display='block';seal.classList.add('playing');}
 function setPaused(){iconPlay.style.display='block';iconPause.style.display='none';seal.classList.remove('playing');}
 audio.addEventListener('ended',setPaused);
