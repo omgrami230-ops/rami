@@ -113,6 +113,11 @@ select option{background:#1a0f3d}
 .mem{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--c);border-left-width:4px;border-radius:12px;padding:12px 14px;margin-bottom:10px;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 16%,transparent),rgba(14,10,40,.6))}
 .mem .nm{font-family:"Cinzel Decorative",Cinzel,Georgia,serif;font-size:18px}
 .mem .rk{color:var(--c);text-shadow:0 0 8px var(--c);text-align:right;font-family:"Cinzel Decorative",Cinzel,Georgia,serif;font-size:14px}
+body.ro .adm,body.ro [data-a="m"],body.ro [data-a="del"],body.ro [data-del]{display:none!important}
+body:not(.ro) .ronote{display:none}
+#lg{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(6,3,22,.74);backdrop-filter:blur(5px)}
+#lg input{width:100%;margin:14px 0 6px}
+#lg .msg{min-height:22px;color:var(--bad);font-size:16px;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -191,8 +196,8 @@ var GRADES=[
 var STEP=50, COL=['#93a8ff','#5eb0ff','#a78bfa','#d77bff','#f5d78a'], SIG=['✧','✦','❖','✺','♛'], KEY='registre-artistes-v1';
 var people=[], openM={}, openH={}, q='';
 
-function load(){try{var r=localStorage.getItem(KEY);if(r)people=JSON.parse(r)||[];}catch(e){people=[];}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(people));}catch(e){}}
+function load(){}
+function save(){pushData();}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function gi(p){return Math.min(GRADES.length-1,Math.floor(p/STEP));}
 function fmt(t){return new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
@@ -274,8 +279,8 @@ document.getElementById('file').onchange=function(e){
   r.readAsText(f);e.target.value='';
 };
 var TYPES=['Peinture','Sculpture','Musique','Poésie','Théâtre','Danse','Autre'],AKEY='registre-artistes-oeuvres-v1',arts=[],aq='',af='';
-try{arts=JSON.parse(localStorage.getItem(AKEY))||[];}catch(e){arts=[];}
-function saveArts(){try{localStorage.setItem(AKEY,JSON.stringify(arts));}catch(e){}}
+
+function saveArts(){pushData();}
 document.getElementById('aType').innerHTML=TYPES.map(function(t){return '<option>'+t+'</option>';}).join('');
 document.getElementById('aFilter').innerHTML='<option value="">Tous les arts</option>'+TYPES.map(function(t){return '<option>'+t+'</option>';}).join('');
 document.getElementById('aDate').value=new Date().toISOString().slice(0,10);
@@ -374,6 +379,50 @@ document.getElementById('legend').onclick=function(e){var r=e.target.closest('.r
 document.getElementById('legend').onkeydown=function(e){if(e.key!=='Enter'&&e.key!==' ')return;var r=e.target.closest('.rank');if(r){e.preventDefault();gmOpen(parseInt(r.dataset.i,10),r);}};
 document.addEventListener('keydown',function(e){if(GM.hidden)return;if(e.key==='Escape')gmClose();else if(e.key==='ArrowRight'&&gmCur<4)gmDraw(gmCur+1);else if(e.key==='ArrowLeft'&&gmCur>0)gmDraw(gmCur-1);});
 load();render();
+var rev=0,adminKey='',pushT=null,pushing=false,again=false,loaded=false,persistent=true;
+try{adminKey=sessionStorage.getItem('reg-admin')||'';}catch(e){}
+function isAdmin(){return !!adminKey;}
+function setMode(){document.body.classList.toggle('ro',!isAdmin());var b=document.getElementById('sAdm');if(b){b.textContent=isAdmin()?'🔓':'🔑';b.title=isAdmin()?'Gardien connecté — cliquer pour se déconnecter':'Connexion gardien';}}
+function applyData(d){people=Array.isArray(d.artistes)?d.artistes:[];arts=Array.isArray(d.oeuvres)?d.oeuvres:[];rev=d.rev||0;persistent=d.persistent!==false;render();renderArts();if(!document.getElementById('tab-cer').hidden)renderCercle();}
+function fetchData(quiet){return fetch('/api/data',{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){if(quiet&&loaded&&d.rev===rev)return;loaded=true;applyData(d);}).catch(function(){if(!quiet)toast('Registre injoignable pour le moment.');});}
+function pushData(){if(!isAdmin())return;clearTimeout(pushT);pushT=setTimeout(doPush,40);}
+function doPush(){if(pushing){again=true;return;}pushing=true;
+  fetch('/api/data',{method:'PUT',headers:{'Content-Type':'application/json','X-Admin-Key':adminKey},body:JSON.stringify({artistes:people,oeuvres:arts,rev:rev})})
+  .then(function(r){return r.json().catch(function(){return {};}).then(function(j){return {s:r.status,j:j};});})
+  .then(function(x){pushing=false;
+    if(x.s===200){rev=x.j.rev;if(again){again=false;doPush();}}
+    else if(x.s===409){again=false;toast('Le registre a été modifié ailleurs : données rechargées, refaites votre action.');fetchData();}
+    else if(x.s===401){again=false;logout(true);toast('Session gardien expirée : reconnectez-vous.');}
+    else{again=false;toast('Enregistrement impossible ('+x.s+').');}})
+  .catch(function(){pushing=false;again=false;toast('Enregistrement impossible : serveur injoignable.');});}
+function logout(silent){adminKey='';try{sessionStorage.removeItem('reg-admin');}catch(e){}setMode();if(!silent)toast('Mode gardien désactivé.');}
+function loginReq(pw){return fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})}).then(function(r){return r.json().catch(function(){return {};}).then(function(j){return {s:r.status,j:j};});});}
+function migrate(){var lp=[],la=[];try{lp=JSON.parse(localStorage.getItem(KEY))||[];la=JSON.parse(localStorage.getItem(AKEY))||[];}catch(e){}
+  if(!Array.isArray(lp))lp=[];if(!Array.isArray(la))la=[];
+  if(!people.length&&!arts.length&&(lp.length||la.length)&&confirm('Le registre partagé est vide. Importer les '+lp.length+' artiste(s) et '+la.length+' œuvre(s) enregistrés dans ce navigateur ?')){people=lp;arts=la;pushData();render();renderArts();toast('Données importées dans le registre partagé.');}}
+var LG=document.createElement('div');LG.id='lg';LG.hidden=true;LG.setAttribute('role','dialog');LG.setAttribute('aria-modal','true');document.body.appendChild(LG);
+function lgClose(){LG.hidden=true;}
+function lgOpen(){LG.innerHTML='<div class="gm-box" style="--c:#f5d78a"><button class="ghost gm-x" data-x="1" aria-label="Fermer">✕</button><div class="gm-sg">⚜</div><h2>Accès gardien</h2><div class="gm-pts">Réservé à la tenue du registre. Les visiteurs le consultent en lecture seule.</div><input type="password" id="lgPw" placeholder="Mot de passe" autocomplete="current-password"><div class="msg" id="lgMsg"></div><button id="lgGo">Se connecter</button></div>';LG.hidden=false;document.getElementById('lgPw').focus();}
+function lgSubmit(){var pw=document.getElementById('lgPw').value,m=document.getElementById('lgMsg');if(!pw){m.textContent='Saisissez le mot de passe.';return;}
+  loginReq(pw).then(function(x){
+    if(x.s===200){adminKey=pw;try{sessionStorage.setItem('reg-admin',pw);}catch(e){}setMode();lgClose();SFX.reg();toast('Mode gardien activé.');
+      if(!persistent)setTimeout(function(){toast('Attention : aucun volume Railway, les données seront perdues au prochain déploiement.');},3600);migrate();}
+    else if(x.s===401)m.textContent='Mot de passe incorrect.';
+    else if(x.s===429)m.textContent='Trop de tentatives, réessayez dans quelques minutes.';
+    else if(x.s===503)m.textContent='Aucun mot de passe défini sur le serveur (variable ADMIN_PASSWORD).';
+    else m.textContent='Connexion impossible.';
+  }).catch(function(){m.textContent='Serveur injoignable.';});}
+LG.onclick=function(e){if(e.target===LG||e.target.closest('[data-x]'))lgClose();else if(e.target.id==='lgGo')lgSubmit();};
+LG.onkeydown=function(e){if(e.key==='Enter'&&e.target.id==='lgPw')lgSubmit();};
+document.addEventListener('keydown',function(e){if(e.key==='Escape')lgClose();});
+(function(){var b=document.createElement('button');b.id='sAdm';b.className='ghost';b.setAttribute('aria-label','Connexion gardien');document.querySelector('.snd').appendChild(b);b.onclick=function(){if(isAdmin())logout();else lgOpen();};
+  ['newName','aAdd','imp'].forEach(function(id){var el=document.getElementById(id),t=id==='imp'?el:el.closest('.panel');if(t)t.classList.add('adm');});
+  var n=document.createElement('div');n.className='hint ronote';n.textContent='Mode consultation — le registre est tenu à jour par les gardiens.';var tabs=document.querySelector('.tabs');tabs.parentNode.insertBefore(n,tabs);})();
+setMode();
+fetchData().then(function(){if(isAdmin())loginReq(adminKey).then(function(x){if(x.s!==200)logout(true);});});
+function poll(){if(document.hidden||pushing)return;if(isAdmin()&&Object.keys(openM).some(function(k){return openM[k];}))return;fetchData(true);}
+setInterval(poll,20000);document.addEventListener('visibilitychange',poll);
+
 </script>
 </body>
 </html>
